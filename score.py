@@ -250,9 +250,15 @@ if __name__ == '__main__':
 
     # processing
     match_scores = score_matches_from_league(args['url'])
+    vod_urls = utils.extract_vod_urls(args['url'])
 
     opendota = 'https://www.opendota.com/matches/'
     print("\n".join([
-        f"{match['title']} (score={match['score']}) ({opendota}{match['id']})"
+        " | ".join([
+            f"{match['title']:<50}",
+            f"score={match['score']:<20}",
+            f"{opendota}{match['id']:<15}",
+            vod_urls.get(str(match['id']), "No VOD found.")
+        ])
         for match in match_scores
     ]))

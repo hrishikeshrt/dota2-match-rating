@@ -38,3 +38,35 @@ def extract_match_ids(url):
     return list(set(match_ids))
 
 ###############################################################################
+
+
+def extract_youtube_urls(url):
+    """
+    Extract YouTube URLs from Liquipedia URL
+    """
+    youtube_urls = {}
+
+    html = requests.get(url).content.decode()
+    soup = BeautifulSoup(html, 'lxml')
+    url_divs = soup.select('div.bracket-popup-footer.plainlinks.vodlink')
+    for div in url_divs:
+        div_links = div.find_all('a')
+        vod_links = [(link['title'], link) for link in div_links
+                     if ('title' in link.attrs and
+                         'watch game' in link['title'].lower())]
+        dotabuff_links = [(link['title'], link) for link in div_links
+                          if ('href' in link.attrs and
+                              'title' in link.attrs and
+                              'dotabuff.com' in link['href'])]
+        for vl in vod_links:
+            for dl in dotabuff_links:
+                pattern = r'.*(Game \d+).*'
+                m1 = re.match(pattern, vl[0])
+                m2 = re.match(pattern, dl[0])
+                if m1 and m2 and m1.group(1) == m2.group(1):
+                    match_id = dl[1]['href'].split('/')[-1]
+                    youtube_urls[match_id] = vl[1]['href']
+
+    return youtube_urls
+
+###############################################################################
