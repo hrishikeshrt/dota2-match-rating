@@ -9,6 +9,8 @@ Created on Sat Mar  6 00:36:49 2021
 import logging
 from collections import defaultdict
 
+from tqdm import tqdm
+
 import opendota as api
 import utils
 import settings
@@ -216,9 +218,10 @@ def score_matches_from_league(league_url):
     config['meta'] = meta
 
     match_ids = utils.extract_match_ids(league_url)
+    logger.info(f"Extracted {len(match_ids)} match-ids.")
 
     match_scores = {}
-    for match_id in match_ids:
+    for match_id in tqdm(match_ids):
         match = api.get_match(match_id)
         try:
             match_scores[match_id] = match_score(match, config)
