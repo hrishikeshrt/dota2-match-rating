@@ -2,6 +2,11 @@
 
 Figure out which games you should not miss.
 
+## Requirements
+
+- python3.6+
+- PyPI requirements in `requirements.txt` (`pip3 install -r requirements.txt`)
+
 ## Structure
 - API functions in `opendota.py` (`fetch_data` being the core one)
 

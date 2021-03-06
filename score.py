@@ -20,8 +20,8 @@ logger = logging.getLogger(__name__)
 ###############################################################################
 
 
-def calculate_meta(hero_stats):
-    meta_scores = {}
+def calculate_meta_scores(hero_stats):
+    scores = {}
     picks = []
     bans = []
     contests = []
@@ -36,14 +36,16 @@ def calculate_meta(hero_stats):
 
     for hero in hero_stats:
         contest = hero['pro_pick'] + hero['pro_ban']
-        meta_scores[hero['id']] = sum([
+        scores[hero['id']] = sum([
             contest / max_contests,
             contest / total_contests
         ])
-    return meta_scores
+    return scores
+
+###############################################################################
 
 
-def flips_score(values):
+def calculate_flips_score(values):
     flip_count = 0
     flip_score = 0
     # flip_index = []
@@ -58,29 +60,18 @@ def flips_score(values):
     return flip_count, flip_score
 
 
-def match_score(match, config, **kwargs):
-    # TODO: consider moving weights to settings.py
-    weights = {
-        'duration': 1,
-        'kills_total': 1,
-        'kills_difference': 1,
-        'advantage_flips_gold': 1,
-        'advantage_flips_experience': 1,
-        'team_rating_average': 1,
-        'team_rating_difference': 1,
-        'non_meta_picks': 1,
-        'aegis_pick': 1,
-        'aegis_deny': 1,
-        'aegis_stolen': 1,
-        'rapier_pick': 1,
-        'rapier_drop': 1,  # information unavailable
-        'teamfights': 1,
-        'gold_per_min': 1,
-        'xp_per_min': 1,
-        'last_hits_per_min': 1,
-        'surprise_factor': 1,  # not handled
-    }
-    weights.update(kwargs)
+def calculate_match_score(match_id, config, **kwargs):
+    """Assign score to a DotA2 Match"""
+    match = api.get_match(match_id)
+
+    weight_prefix = 'weight_'
+    normalizer_prefix = 'normalizer_'
+
+    for k, v in kwargs.items():
+        if k.startswith(weight_prefix):
+            config['weights'][k.replace(weight_prefix, '')] = v
+        if k.startswith(normalizer_prefix):
+            config['normalizers'][k.replace(normalizer_prefix, '')] = v
 
     # ----------------------------------------------------------------------- #
     # Scores
@@ -89,8 +80,10 @@ def match_score(match, config, **kwargs):
     team_dire = api.get_team(match['dire_team_id'])
 
     # flips score
-    gold_flips, gold_flips_score = flips_score(match['radiant_gold_adv'])
-    xp_flips, xp_flips_score = flips_score(match['radiant_xp_adv'])
+    gold_values = match['radiant_gold_adv']
+    xp_values = match['radiant_xp_adv']
+    gold_flips, gold_flips_score = calculate_flips_score(gold_values)
+    xp_flips, xp_flips_score = calculate_flips_score(xp_values)
 
     # rating score
     max_rating = api.get_teams()[0]['rating']
@@ -108,7 +101,7 @@ def match_score(match, config, **kwargs):
     kills_better = max(match['radiant_score'], match['dire_score'])
 
     # scores
-    kills_score = (kills_total) / config['kills']
+    kills_score = (kills_total) / config['normalizers']['kills']
     kill_difference_score = 1 - kill_difference / kills_better
 
     # aegis scores
@@ -122,13 +115,14 @@ def match_score(match, config, **kwargs):
         if objective['type'] == 'CHAT_MESSAGE_AEGIS_STOLEN':
             aegis_stolen += 1
 
-    aegis_pick_score = aegis_pick / config['aegis_pick']
-    aegis_deny_score = aegis_deny / config['aegis_deny']
-    aegis_stolen_score = aegis_stolen / config['aegis_stolen']
+    aegis_pick_score = aegis_pick / config['normalizers']['aegis_pick']
+    aegis_deny_score = aegis_deny / config['normalizers']['aegis_deny']
+    aegis_stolen_score = aegis_stolen / config['normalizers']['aegis_stolen']
 
     # other scores
-    duration_score = match['duration'] / config['duration']
-    teamfights_score = len(match['teamfights']) / config['teamfights']
+    duration_score = match['duration'] / config['normalizers']['duration']
+    teamfights_count = len(match['teamfights'])
+    teamfights_score = teamfights_count / config['normalizers']['teamfights']
 
     # player/hero based scores
     meta_score_total = 0
@@ -145,7 +139,7 @@ def match_score(match, config, **kwargs):
         meta_score_total += (1 - config['meta'][hero_id])
 
     # normalize
-    rapier_score = rapier_count / config['rapier']
+    rapier_score = rapier_count / config['normalizers']['rapier']
     meta_score = meta_score_total / 10
     for k, v in benchmarks.items():
         benchmark_scores[k] /= 10
@@ -179,7 +173,8 @@ def match_score(match, config, **kwargs):
 
     # ----------------------------------------------------------------------- #
 
-    score = sum([metrics[m] * weights[m] for m in metrics if m in weights])
+    score = sum([metrics[m] * config['weights'][m]
+                 for m in metrics if m in config['weights']])
 
     match_info = {}
     match_info['id'] = match['match_id']
@@ -194,7 +189,7 @@ def match_score(match, config, **kwargs):
 ###############################################################################
 
 
-def score_matches_from_league(league_url):
+def score_matches_from_league(league_url, config):
     """
     Score All Matches from DotA2 League
 
@@ -210,21 +205,13 @@ def score_matches_from_league(league_url):
     match_scores_sorted: list
         Sorted list of matches by scores
     """
-    hero_stats = api.get_hero_stats()
-    meta = calculate_meta(hero_stats)
-
-    config = {}
-    config.update(settings.normalizers)
-    config['meta'] = meta
-
     match_ids = utils.extract_match_ids(league_url)
     logger.info(f"Extracted {len(match_ids)} match-ids.")
 
     match_scores = {}
     for match_id in tqdm(match_ids):
-        match = api.get_match(match_id)
         try:
-            match_scores[match_id] = match_score(match, config)
+            match_scores[match_id] = calculate_match_score(match_id, config)
         except Exception as e:
             logger.warning(f"Skipped ({match_id}): {e}")
 
@@ -237,7 +224,10 @@ def score_matches_from_league(league_url):
 
 
 if __name__ == '__main__':
+    import json
+    import tabulate
     import argparse
+
     league_urls = settings.league_urls
 
     # defaults
@@ -246,19 +236,33 @@ if __name__ == '__main__':
     # parser
     parser = argparse.ArgumentParser(description="Score DotA2 Matches")
     parser.add_argument("-u", "--url", help="Leage URL", default=league_url)
+    parser.add_argument("-m", "--match", help="Match ID")
     args = vars(parser.parse_args())
 
     # processing
-    match_scores = score_matches_from_league(args['url'])
-    vod_urls = utils.extract_vod_urls(args['url'])
+    hero_stats = api.get_hero_stats()
+    meta = calculate_meta_scores(hero_stats)
 
-    opendota = 'https://www.opendota.com/matches/'
-    print("\n".join([
-        " | ".join([
-            f"{match['title']:<50}",
-            f"score={match['score']:<20}",
-            f"{opendota}{match['id']:<15}",
-            vod_urls.get(str(match['id']), "No VOD found.")
-        ])
-        for match in match_scores
-    ]))
+    # scoring parameters
+    config = {}
+    config['meta'] = meta
+    config['normalizers'] = settings.normalizers
+    config['weights'] = settings.weights
+
+    if args.get('match', None):
+        score = calculate_match_score(args['match'], config)
+        print(json.dumps(score, ensure_ascii=False, indent=2))
+    else:
+        match_scores = score_matches_from_league(args['url'], config)
+        vod_urls = utils.extract_vod_urls(args['url'])
+
+        opendota = 'https://www.opendota.com/matches/'
+        headers = ['Match', 'Score', 'Details', 'VOD']
+        print(tabulate.tabulate([[
+                match['title'],
+                match['score'],
+                f"{opendota}{match['id']}",
+                vod_urls.get(str(match['id']), "No VOD found.")
+            ]
+            for match in match_scores
+        ], headers=headers, tablefmt='fancy_grid'))
