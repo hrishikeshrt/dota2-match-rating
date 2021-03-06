@@ -40,7 +40,7 @@ def extract_match_ids(url):
 ###############################################################################
 
 
-def extract_youtube_urls(url):
+def extract_vod_urls(url):
     """
     Extract YouTube URLs from Liquipedia URL
     """
