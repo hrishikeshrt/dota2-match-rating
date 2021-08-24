@@ -1,12 +1,11 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 """
-Created on Sat Mar  6 18:27:25 2021
-
-@author: Hrishikesh Terdalkar
+Utility Functions
 """
 
 import re
+
 import requests
 from bs4 import BeautifulSoup
 

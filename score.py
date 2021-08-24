@@ -1,21 +1,26 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 """
-Created on Sat Mar  6 00:36:49 2021
-
-@author: Hrishikesh Terdalkar
+Score DotA2 Matches
 """
+
+__author__ = "Hrishikesh Terdalkar"
+
+###############################################################################
 
 import logging
 from collections import defaultdict
 
 from tqdm import tqdm
+import opendota
 
-import opendota as api
 import utils
 import settings
 
+###############################################################################
+
 logger = logging.getLogger(__name__)
+api = opendota.OpenDota()
 
 ###############################################################################
 
