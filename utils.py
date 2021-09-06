@@ -12,27 +12,32 @@ from bs4 import BeautifulSoup
 ###############################################################################
 
 
-def extract_match_ids(url):
-    """
-    Extract Match IDs from URL
-
-    Match IDs are extracted from their datdota/dotabuff/stratz links
-    """
-    html = requests.get(url).content.decode()
-    soup = BeautifulSoup(html, 'lxml')
-    all_links = [a['href'] for a in soup.find_all('a') if 'href' in a.attrs]
+def extract_match_id(url):
+    """Extract Match ID from Match URL (datdota/dotabuff/stratz)"""
     patterns = [
+        'opendota.com/matches/([0-9]+)$',
         'datdota.com/matches/([0-9]+)$',
         'dotabuff.com/matches/(0-9]+)$',
         'stratz.com/en-us/match/([0-9]+)$'
     ]
 
+    for pattern in patterns:
+        m = re.search(pattern, url)
+        if m:
+            return m.group(1)
+    return None
+
+
+def extract_all_match_ids(league_url):
+    """Extract Match IDs from League URL"""
+    html = requests.get(league_url).content.decode()
+    soup = BeautifulSoup(html, 'lxml')
+    all_links = [a['href'] for a in soup.find_all('a') if 'href' in a.attrs]
     match_ids = []
     for link in all_links:
-        for pattern in patterns:
-            m = re.search(pattern, link)
-            if m:
-                match_ids.append(m.group(1))
+        match_id = extract_match_id(link)
+        if match_id is not None:
+            match_ids.append(match_id)
 
     return list(set(match_ids))
 

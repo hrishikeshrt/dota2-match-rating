@@ -26,6 +26,7 @@ api = opendota.OpenDota()
 
 
 def calculate_meta_scores(hero_stats):
+    """Calculate Scores based on the Meta"""
     scores = {}
     picks = []
     bans = []
@@ -51,6 +52,7 @@ def calculate_meta_scores(hero_stats):
 
 
 def calculate_flips_score(values):
+    """Calculate Scores based on flips (in Gold/Experience)"""
     flip_count = 0
     flip_score = 0
     # flip_index = []
@@ -210,7 +212,7 @@ def score_matches_from_league(league_url, config):
     match_scores_sorted: list
         Sorted list of matches by scores
     """
-    match_ids = utils.extract_match_ids(league_url)
+    match_ids = utils.extract_all_match_ids(league_url)
     logger.info(f"Extracted {len(match_ids)} match-ids.")
 
     match_scores = {}
@@ -255,18 +257,22 @@ if __name__ == '__main__':
     config['weights'] = settings.weights
 
     if args.get('match', None):
-        score = calculate_match_score(args['match'], config)
+        match_id = utils.extract_match_id(args['match'])
+        if match_id is None:
+            match_id = args['match']
+        score = calculate_match_score(match_id, config)
         print(json.dumps(score, ensure_ascii=False, indent=2))
     else:
-        match_scores = score_matches_from_league(args['url'], config)
-        vod_urls = utils.extract_vod_urls(args['url'])
+        league_url = args['url']
+        match_scores = score_matches_from_league(league_url, config)
+        vod_urls = utils.extract_vod_urls(league_url)
 
-        opendota = 'https://www.opendota.com/matches/'
+        opendota_base = 'https://www.opendota.com/matches/'
         headers = ['Match', 'Score', 'Details', 'VOD']
         print(tabulate.tabulate([[
                 match['title'],
                 match['score'],
-                f"{opendota}{match['id']}",
+                f"{opendota_base}{match['id']}",
                 vod_urls.get(str(match['id']), "No VOD found.")
             ]
             for match in match_scores
