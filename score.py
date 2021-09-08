@@ -213,6 +213,33 @@ def calculate_match_score(match_id, config, **kwargs):
 ###############################################################################
 
 
+def score_matches(match_ids, config):
+    """
+    Score Multiple Matches
+
+    Parameters
+    ----------
+
+    matches: list
+        List of match IDs
+
+    Returns
+    -------
+    match_scores_sorted: list
+        Sorted list of matches by scores
+    """
+    match_scores = {}
+    for match_id in tqdm(match_ids):
+        try:
+            match_scores[match_id] = calculate_match_score(match_id, config)
+        except Exception:
+            logger.exception(f"Skipped ({match_id})")
+
+    match_scores_sorted = sorted(match_scores.values(),
+                                 key=lambda x: x['score'], reverse=True)
+    return match_scores_sorted
+
+
 def score_matches_from_league(league_url, config):
     """
     Score All Matches from DotA2 League
@@ -231,18 +258,7 @@ def score_matches_from_league(league_url, config):
     """
     match_ids = utils.extract_all_match_ids(league_url)
     logger.info(f"Extracted {len(match_ids)} match-ids.")
-
-    match_scores = {}
-    for match_id in tqdm(match_ids):
-        try:
-            match_scores[match_id] = calculate_match_score(match_id, config)
-        except Exception:
-            logger.exception(f"Skipped ({match_id})")
-
-    match_scores_sorted = sorted(match_scores.values(),
-                                 key=lambda x: x['score'], reverse=True)
-
-    return match_scores_sorted
+    return score_matches(match_ids, config)
 
 ###############################################################################
 
@@ -252,15 +268,12 @@ if __name__ == '__main__':
     import tabulate
     import argparse
 
-    league_urls = settings.league_urls
-
-    # defaults
-    league_url = league_urls['dpc_eu_1_upper']
-
     # parser
     parser = argparse.ArgumentParser(description="Score DotA2 Matches")
-    parser.add_argument("-u", "--url", help="Leage URL", default=league_url)
-    parser.add_argument("-m", "--match", help="Match ID")
+    parser.add_argument("-u", "--url", help="Leage URL")
+    parser.add_argument("-m", "--match", help="Match ID or URL")
+    parser.add_argument("-M", "--matches", nargs='+',
+                        help="List of Match IDs or URLs")
     args = vars(parser.parse_args())
 
     # processing
@@ -273,16 +286,30 @@ if __name__ == '__main__':
     config['normalizers'] = settings.normalizers
     config['weights'] = settings.weights
 
-    if args.get('match', None):
-        match_id = utils.extract_match_id(args['match'])
-        if match_id is None:
-            match_id = args['match']
+    if args.get('match'):
+        match_id = utils.extract_match_id(args['match']) or args['match']
         score = calculate_match_score(match_id, config)
         print(json.dumps(score, ensure_ascii=False, indent=2))
-    else:
-        league_url = args['url']
-        match_scores = score_matches_from_league(league_url, config)
-        vod_urls = utils.extract_vod_urls(league_url)
+
+    if args.get('url') or args.get('matches'):
+        match_scores = []
+        vod_urls = []
+
+        if args.get('matches'):
+            match_ids = [
+                utils.extract_match_id(match_id) or match_id
+                for match_id in args['matches']
+            ]
+
+        if args.get('url'):
+            league_url = args['url']
+            match_ids = utils.extract_all_match_ids(league_url)
+            logger.info(f"Extracted {len(match_ids)} match-ids.")
+
+            vod_urls = utils.extract_vod_urls(league_url)
+
+        # score all matches
+        match_scores = score_matches(match_ids, config)
 
         opendota_base = 'https://www.opendota.com/matches/'
         headers = ['Match', 'Score', 'Details', 'VOD']
