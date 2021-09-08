@@ -35,28 +35,21 @@ weights = {
     'duration': 1,
     'kills_total': 1,
     'kills_difference': 1,
-    'advantage_flips_gold': 1,
-    'advantage_flips_experience': 1,
+    'advantage_flips_gold': 2,
+    'advantage_flips_experience': 2,
     'team_rating_average': 1,
     'team_rating_difference': 1,
     'non_meta_picks': 1,
-    'aegis_pick': 1,
-    'aegis_deny': 1,
-    'aegis_stolen': 1,
-    'rapier_pick': 1,
+    'aegis_pick': 2,
+    'aegis_deny': 2,
+    'aegis_stolen': 2,
+    'rapier_pick': 1.5,
     'rapier_drop': 1,
     'teamfights': 1,
-    'gold_per_min': 1,
-    'xp_per_min': 1,
-    'last_hits_per_min': 1,
-    'surprise_factor': 1,
-}
-
-###############################################################################
-
-league_urls = {
-    'dpc_eu_1_upper': 'https://liquipedia.net/dota2/Dota_Pro_Circuit/2021/1/Europe/Upper_Division',
-    'dpc_cn_1_upper': 'https://liquipedia.net/dota2/Dota_Pro_Circuit/2021/1/China/Upper_Division'
+    'gold_per_min': 0.75,
+    'xp_per_min': 0.75,
+    'last_hits_per_min': 0.75,
+    'surprise_factor': 1
 }
 
 ###############################################################################
