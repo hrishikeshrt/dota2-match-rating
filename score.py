@@ -52,17 +52,20 @@ def calculate_meta_scores(hero_stats):
 
 
 def calculate_flips_score(values):
-    """Calculate Scores based on flips (in Gold/Experience)"""
+    """Calculate Scores based on advantage flips (in Gold/Experience)"""
     flip_count = 0
     flip_score = 0
     # flip_index = []
 
-    max_value = abs(max(values, key=abs))
-    for idx, (x1, x2, x3) in enumerate(zip(values, values[1:], values[2:])):
-        if (x2 - x1) * (x3 - x2) < 0:
-            flip_count += 1
-            flip_score += abs(x3 - x2) / max_value
-            # flip_index.append(idx + 2)
+    try:
+        max_value = abs(max(values, key=abs))
+        for ix, (x1, x2, x3) in enumerate(zip(values, values[1:], values[2:])):
+            if (x2 - x1) * (x3 - x2) < 0:
+                flip_count += 1
+                flip_score += abs(x3 - x2) / max_value
+                # flip_index.append(ix + 2)
+    except Exception:
+        logger.warning("Error in calculating advantage flips score.")
 
     return flip_count, flip_score
 
@@ -116,11 +119,14 @@ def calculate_match_score(match_id, config, **kwargs):
     aegis_deny = 0
     aegis_stolen = 0
 
-    for objective in match['objectives']:
-        if objective['type'] == 'CHAT_MESSAGE_AEGIS':
-            aegis_pick += 1
-        if objective['type'] == 'CHAT_MESSAGE_AEGIS_STOLEN':
-            aegis_stolen += 1
+    if match.get('objectives'):
+        for objective in match['objectives']:
+            if objective['type'] == 'CHAT_MESSAGE_AEGIS':
+                aegis_pick += 1
+            if objective['type'] == 'CHAT_MESSAGE_AEGIS_STOLEN':
+                aegis_stolen += 1
+    else:
+        logger.warning("No objectives information found.")
 
     aegis_pick_score = aegis_pick / config['normalizers']['aegis_pick']
     aegis_deny_score = aegis_deny / config['normalizers']['aegis_deny']
@@ -128,8 +134,15 @@ def calculate_match_score(match_id, config, **kwargs):
 
     # other scores
     duration_score = match['duration'] / config['normalizers']['duration']
-    teamfights_count = len(match['teamfights'])
-    teamfights_score = teamfights_count / config['normalizers']['teamfights']
+
+    try:
+        teamfights_count = len(match['teamfights'])
+        teamfights_score = (
+            teamfights_count / config['normalizers']['teamfights']
+        )
+    except Exception:
+        teamfights_score = 0
+        logger.warning("Error in calculating teamfights score.")
 
     # player/hero based scores
     meta_score_total = 0
@@ -138,12 +151,16 @@ def calculate_match_score(match_id, config, **kwargs):
 
     for player in match['players']:
         hero_id = player['hero_id']
-        benchmarks = player['benchmarks']
         rapier_count += player.get('purchase_rapier', 0)
-        for k, v in benchmarks.items():
-            benchmark_scores[k] += v['pct']
-
         meta_score_total += (1 - config['meta'][hero_id])
+
+    try:
+        for player in match['players']:
+            benchmarks = player.get('benchmarks', {})
+            for k, v in benchmarks.items():
+                benchmark_scores[k] += v['pct']
+    except Exception:
+        logger.warning("Error in calculating benchmark score.")
 
     # normalize
     rapier_score = rapier_count / config['normalizers']['rapier']
@@ -219,8 +236,8 @@ def score_matches_from_league(league_url, config):
     for match_id in tqdm(match_ids):
         try:
             match_scores[match_id] = calculate_match_score(match_id, config)
-        except Exception as e:
-            logger.warning(f"Skipped ({match_id}): {e}")
+        except Exception:
+            logger.exception(f"Skipped ({match_id})")
 
     match_scores_sorted = sorted(match_scores.values(),
                                  key=lambda x: x['score'], reverse=True)
