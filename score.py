@@ -163,12 +163,18 @@ def calculate_match_score(match_id, config, **kwargs):
         logger.warning("Error in calculating benchmark score.")
 
     # normalize
+    # TODO:
+    # rapier score should perhaps consider when a rapier was bought
+    # i.e. an early rapier gets a higher score
     rapier_score = rapier_count / config['normalizers']['rapier']
     meta_score = meta_score_total / 10
     for k, v in benchmarks.items():
         benchmark_scores[k] /= 10
 
     # surprise factor
+    # higher if,
+    # * closely matched teams stomp
+    # * unequally matched teams get a close match
     # TODO: consider if it is required
     # may be already captured via rating difference + flip score?
 
