@@ -10,7 +10,9 @@ Figure out which games you should not miss.
 
 ## Scoring Metrics
 
-Several metrics are used to assign a score (1) either between 0 to 1 or (2) normalized using standard numbers
+Several metrics are used to assign a score either,
+* Normalized to be between 0 to 1
+* Normalized using standard numbers (so that it's *roughly* between 0 to 1)
 
 Some of the notable metrics are described below. One's perception of importance of various metrics can be different, and therefore the weightage for those can be edited in 
 `settings.py`
@@ -20,7 +22,7 @@ Some of the notable metrics are described below. One's perception of importance 
 * Longer matches might be more interesting.
 * Matches wih many teamfights, many kills, rapier purchases, rapier drops, aegis snatches etc. might be more interesting. 
 
-*Note*: While these might be influenced by the match length, they are not the exact same thing.
+**Note**: While these might be influenced by the match length, they are not the exact same thing.
 
 
 ### Advantage Flips
@@ -39,7 +41,7 @@ Some of the notable metrics are described below. One's perception of importance 
 * Teams with similar rating may be more interesting.
 * Teams with higher rating may be more interesting.
 
-*TODO*: Surprise-factor iplementation, which should assign higher score for either a close match between mismatched teams, or a stomp between closely matched teams. 
+**TODO**: Surprise-factor iplementation, which should assign higher score for either a close match between mismatched teams, or a stomp between closely matched teams. 
 
 ## Usage
 
