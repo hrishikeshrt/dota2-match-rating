@@ -299,7 +299,7 @@ if __name__ == '__main__':
 
     if args.get('url') or args.get('matches'):
         match_scores = []
-        vod_urls = []
+        vod_urls = {}
 
         if args.get('matches'):
             match_ids = [
