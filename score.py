@@ -7,7 +7,19 @@ Score DotA2 Matches
 __author__ = "Hrishikesh Terdalkar"
 
 ###############################################################################
+# CAUTION:
+#
+# Several metrics are dependent on team ratings, recent hero pick/ban rate,
+# hero benchmarks etc.
+# So, this will not give ideal results for older matches
+#
+# TODO:
+# - Detect if matches involved are old and disable proper metrics
+# - Emit a warning if metrics are going to be disabled
+#
+###############################################################################
 
+import datetime
 import logging
 from collections import defaultdict
 
@@ -33,15 +45,15 @@ def calculate_meta_scores(hero_stats):
     contests = []
 
     for hero in hero_stats:
-        picks.append(hero['pro_pick'])
-        bans.append(hero['pro_ban'])
-        contests.append(hero['pro_pick'] + hero['pro_ban'])
+        picks.append(hero.get('pro_pick', 0))
+        bans.append(hero.get('pro_ban', 0))
+        contests.append(hero.get('pro_pick', 0) + hero.get('pro_ban', 0))
 
     max_contests = max(contests)
     total_contests = sum(contests)
 
     for hero in hero_stats:
-        contest = hero['pro_pick'] + hero['pro_ban']
+        contest = hero.get('pro_pick', 0) + hero.get('pro_ban', 0)
         scores[hero['id']] = sum([
             contest / max_contests,
             contest / total_contests
@@ -67,6 +79,8 @@ def calculate_flips_score(values):
     except Exception:
         logger.warning("Error in calculating advantage flips score.")
 
+    # normalize by flips every 15 minutes
+    flip_score /= (len(values)/15)
     return flip_count, flip_score
 
 
@@ -96,14 +110,19 @@ def calculate_match_score(match_id, config, **kwargs):
     xp_flips, xp_flips_score = calculate_flips_score(xp_values)
 
     # rating score
+    # high overall rating => high rating_average_score
+    # close rating => high rating_difference_score
     max_rating = api.get_teams()[0]['rating']
 
     rating_average = (team_radiant['rating'] + team_dire['rating']) / 2
     rating_difference = abs(team_radiant['rating'] - team_dire['rating'])
     rating_better = max(team_radiant['rating'], team_dire['rating'])
 
-    rating_average_score = rating_average / max_rating
-    rating_difference_score = 1 - rating_difference / rating_better
+    # NOTE: squared to highlight the difference between teams
+    #       since the ratings are usually too close to each other
+
+    rating_average_score = (rating_average / max_rating) ** 2
+    rating_difference_score = (1 - rating_difference / rating_better) ** 2
 
     # kills score
     kills_total = match['radiant_score'] + match['dire_score']
@@ -173,10 +192,26 @@ def calculate_match_score(match_id, config, **kwargs):
 
     # surprise factor
     # higher if,
-    # * closely matched teams stomp
-    # * unequally matched teams get a close match
-    # TODO: consider if it is required
-    # may be already captured via rating difference + flip score?
+    # * Case 1: closely matched teams stomp
+    # * Case 2: unequally matched teams get a close match
+    #
+    # closely matched teams => high rating_difference_score
+    # close games => high closeness_score
+    # Case 1 => high rating_difference_score + low closeness_score
+    # Case 2 => low rating_difference_score + high closeness_score
+    #
+    # NOTE:
+    # Surprise factor implementation is still not ideal, since it uses
+    # team ratings to determine whether teams are equally matched or not,
+    # and the team rating is often not an exact measure of skill.
+    # Perhaps, some kind of "win probability" prediction measure can be used
+
+    closeness_score = (
+        (gold_flips_score + xp_flips_score) /
+        (2 * max(gold_flips_score,  xp_flips_score))
+    )
+
+    surprise_score = abs(rating_difference_score - closeness_score)
 
     # ----------------------------------------------------------------------- #
 
@@ -198,21 +233,26 @@ def calculate_match_score(match_id, config, **kwargs):
         'gold_per_min': benchmark_scores['gold_per_min'],
         'xp_per_min': benchmark_scores['xp_per_min'],
         'last_hits_per_min': benchmark_scores['last_hits_per_min'],
-        'surprise_factor': 0,
+        'surprise_factor': surprise_score,
     }
 
     # ----------------------------------------------------------------------- #
 
-    score = sum([metrics[m] * config['weights'][m]
-                 for m in metrics if m in config['weights']])
+    scores = {
+        k: v * config['weights'].get(k, 0)
+        for k, v in metrics.items()
+    }
+    score = sum(scores.values())
 
     match_info = {}
     match_info['id'] = match['match_id']
+    match_info['start'] = match['start_time']
     match_info['score'] = score
     match_info['title'] = ' '.join([
         team_radiant['name'], 'vs.', team_dire['name']
     ])
     match_info['metrics'] = metrics
+    match_info['scores'] = scores
 
     return match_info
 
@@ -280,6 +320,7 @@ if __name__ == '__main__':
     parser.add_argument("-m", "--match", help="Match ID or URL")
     parser.add_argument("-M", "--matches", nargs='+',
                         help="List of Match IDs or URLs")
+    parser.add_argument("-n", "--top", type=int, help="Show top N matches")
     args = vars(parser.parse_args())
 
     # processing
@@ -316,14 +357,29 @@ if __name__ == '__main__':
 
         # score all matches
         match_scores = score_matches(match_ids, config)
+        top_n = args.get('top', len(match_scores))
 
         opendota_base = 'https://www.opendota.com/matches/'
-        headers = ['Match', 'Score', 'Details', 'VOD']
+        headers = [
+            'Start',
+            'Match', 'Score', 'Details', 'VOD',
+            'Primary Reason'
+        ]
         print(tabulate.tabulate([[
+                datetime.datetime.fromtimestamp(match['start']),
                 match['title'],
                 match['score'],
                 f"{opendota_base}{match['id']}",
-                vod_urls.get(str(match['id']), "No VOD found.")
+                vod_urls.get(str(match['id']), "No VOD found."),
+                ",\n".join(
+                    relevant[0]
+                    for relevant in
+                    sorted(
+                        match['scores'].items(),
+                        key=lambda x: x[1],
+                        reverse=True
+                    )[:3]
+                )
             ]
-            for match in match_scores
+            for match in match_scores[:top_n]
         ], headers=headers, tablefmt='fancy_grid'))
