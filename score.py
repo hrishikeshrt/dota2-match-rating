@@ -84,9 +84,9 @@ def calculate_flips_score(values):
     return flip_count, flip_score
 
 
-def calculate_match_score(match_id, config, **kwargs):
+def calculate_match_score(match_id, config, force=False, **kwargs):
     """Assign score to a DotA2 Match"""
-    match = api.get_match(match_id)
+    match = api.get_match(match_id, force=force)
 
     weight_prefix = 'weight_'
     normalizer_prefix = 'normalizer_'
@@ -279,7 +279,10 @@ def score_matches(match_ids, config):
         try:
             match_scores[match_id] = calculate_match_score(match_id, config)
         except Exception:
-            logger.exception(f"Skipped ({match_id})")
+            try:
+                match_scores[match_id] = calculate_match_score(match_id, config, force=True)
+            except Exception:
+                logger.exception(f"Skipped ({match_id})")
 
     match_scores_sorted = sorted(match_scores.values(),
                                  key=lambda x: x['score'], reverse=True)
