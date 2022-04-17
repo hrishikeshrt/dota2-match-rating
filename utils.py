@@ -52,12 +52,13 @@ def extract_vod_urls(url):
 
     html = requests.get(url).content.decode()
     soup = BeautifulSoup(html, 'lxml')
-    url_divs = soup.select('div.bracket-popup-footer.plainlinks.vodlink')
+    # url_divs = soup.select('div.bracket-popup-footer.plainlinks.vodlink')
+    url_divs = soup.select('div.brkts-popup-footer')
     for div in url_divs:
         div_links = div.find_all('a')
-        vod_links = [(link['title'], link) for link in div_links
-                     if ('title' in link.attrs and
-                         'watch game' in link['title'].lower())]
+        vod_links = [(link.parent['title'], link) for link in div_links
+                     if ('title' in link.parent.attrs and
+                         'watch game' in link.parent['title'].lower())]
         dotabuff_links = [(link['title'], link) for link in div_links
                           if ('href' in link.attrs and
                               'title' in link.attrs and
